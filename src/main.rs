@@ -1,5 +1,5 @@
 use app::App;
-use keyboard::ev_dev::EvDevBackend;
+use keyboard::backend::ev_dev::EvDevBackend;
 use mappings::Mappings;
 
 use anyhow::*;
@@ -14,10 +14,10 @@ fn main() -> Result<()> {
     let mappings = Mappings::from_reader(mappings_file)?;
     dbg!(&mappings);
 
-    let backend = init_evdev_backend()?;
+    //let backend = init_evdev_backend()?;
 
-    let mut app = App::new(backend, mappings)?;
-    app.run()?;
+    //let mut app = App::new(backend, mappings)?;
+    //app.run()?;
     Ok(())
 }
 

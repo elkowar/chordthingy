@@ -3,7 +3,7 @@ use evdev_rs::{
     enums::EventCode, enums::EV_KEY, enums::EV_SYN, Device, InputEvent, TimeVal, UInputDevice,
 };
 
-use super::{key_code::KeyCode, Backend, KeyEvent};
+use crate::keyboard::{key_code::KeyCode, Backend, KeyEvent};
 
 pub struct EvDevBackend {
     input_device: UInputDevice,
@@ -20,7 +20,7 @@ impl EvDevBackend {
 }
 
 impl Backend for EvDevBackend {
-    fn handle_events<F: FnMut(super::KeyEvent)>(&self, mut f: F) -> Result<()> {
+    fn handle_events<F: FnMut(KeyEvent)>(&self, mut f: F) -> Result<()> {
         loop {
             let event = self
                 .device
@@ -38,7 +38,7 @@ impl Backend for EvDevBackend {
         }
     }
 
-    fn send_key_event(&self, event: super::KeyEvent) -> Result<()> {
+    fn send_key_event(&self, event: KeyEvent) -> Result<()> {
         let (key_code, state) = match event {
             KeyEvent::KeyUp(code) => (code, 0),
             KeyEvent::KeyDown(code) => (code, 1),
