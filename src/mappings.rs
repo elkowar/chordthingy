@@ -1,7 +1,10 @@
 use anyhow::*;
 use std::collections::HashMap;
 
-use crate::input::{output_chars_from_string, Chord, OutputChar};
+use crate::keyboard::{
+    chord::Chord,
+    output_char::{output_chars_from_string, OutputChar},
+};
 
 #[derive(Debug)]
 pub struct Mappings {
@@ -14,7 +17,7 @@ impl Mappings {
             serde_json::from_reader(reader).context("Failed to parse mappings")?;
         let mappings: HashMap<Chord, Vec<OutputChar>> = mappings
             .into_iter()
-            .map(|(k, v)| Ok((Chord::new(k), output_chars_from_string(&v)?)))
+            .map(|(k, v)| Ok((Chord::from_string(k), output_chars_from_string(&v)?)))
             .collect::<Result<_>>()?;
 
         Ok(Mappings { mappings })

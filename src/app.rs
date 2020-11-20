@@ -1,17 +1,10 @@
 use anyhow::*;
-use std::{
-    collections::{BTreeMap, HashMap},
-    hash::Hash,
-};
 
-use super::Chord;
 use crate::{
-    history::*,
-    input::{InputDevice, OutputChar},
+    keyboard::output_char::OutputChar,
+    keyboard::{chord::Chord, key_code::KeyCode, Backend, KeyEvent},
     mappings::Mappings,
 };
-use anyhow::*;
-use evdev_rs::enums::{EventCode, EV_KEY};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct KeyPressState<K: Eq> {
@@ -82,63 +75,43 @@ mod test {
     }
 }
 
-pub struct App {
-    device: evdev_rs::Device,
-    input_device: InputDevice,
+pub struct App<B: Backend> {
+    backend: B,
     mappings: Mappings,
     //history: HistoryList<HistoryEntry>,
 }
 
-impl App {
-    pub fn new(mappings: Mappings) -> Result<Self> {
-        let device_path = std::env::args()
-            .nth(1)
-            .unwrap_or("/dev/input/event10".to_owned());
-
-        let device_file = std::fs::File::open(device_path)?;
-
-        let mut device = evdev_rs::Device::new().context("Error getting device")?;
-        device.set_fd(device_file)?;
-        let input_device = evdev_rs::UInputDevice::create_from_device(&device)?;
-        let input_device = InputDevice::new(input_device);
-
+impl<B: Backend> App<B> {
+    pub fn new(backend: B, mappings: Mappings) -> Result<Self> {
         Ok(App {
-            device,
-            input_device,
             mappings,
+            backend,
             //history: HistoryList::new(50),
         })
     }
 
     pub fn run(&mut self) -> Result<()> {
         let mut state = KeyPressState::default();
-        loop {
-            let event = self
-                .device
-                .next_event(evdev_rs::ReadFlag::NORMAL | evdev_rs::ReadFlag::BLOCKING);
 
-            match event {
-                Ok((_, event)) => match (event.value, event.event_code) {
-                    (0, EventCode::EV_KEY(code)) => {
-                        state.release(&code);
-                        if state.all_released() == Some(true) {
-                            self.handle_keypress(Chord::from_ev_keys(&state.clear()))?;
-                        }
-                    }
-                    (_, EventCode::EV_KEY(code)) => {
-                        if state.none_released() != Some(false) {
-                            state.press(code);
-                        } else {
-                            state.clear();
-                        }
-                    }
-                    _ => {}
-                },
-                Err(e) => {
-                    eprintln!("{:#?}", e);
+        self.backend.handle_events(|event| match event {
+            KeyEvent::KeyDown(code) => {
+                if state.none_released() != Some(false) {
+                    state.press(code);
+                } else {
+                    state.clear();
                 }
             }
-        }
+            KeyEvent::KeyUp(code) => {
+                state.release(&code);
+                if state.all_released() == Some(true) {
+                    let result = self.handle_keypress(Chord::from_key_codes(state.clear()));
+                    if let Err(err) = result {
+                        eprintln!("Error handling keypress: {:#?}", err);
+                    }
+                }
+            }
+        })?;
+        Ok(())
     }
 
     pub fn handle_keypress(&self, chord: Chord) -> Result<()> {
@@ -148,15 +121,10 @@ impl App {
 
         if let Some(result) = result {
             for _ in 0..chord.len() {
-                std::thread::sleep(std::time::Duration::from_nanos(10));
-                self.input_device
-                    .write_output_char(&OutputChar::from(EV_KEY::KEY_BACKSPACE))?;
+                self.backend.press_key(KeyCode::KEY_BACKSPACE)?;
             }
             std::thread::sleep(std::time::Duration::from_nanos(10));
-            for key in result {
-                std::thread::sleep(std::time::Duration::from_nanos(10));
-                self.input_device.write_output_char(key)?;
-            }
+            self.backend.write_chars(result)?;
         }
 
         Ok(())
